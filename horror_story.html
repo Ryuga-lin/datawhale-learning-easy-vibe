@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>异闻录 · 异闻事件地图</title>
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts/6.1.0/echarts.min.js"></script>
+<style>
+:root{
+  --bg:#0a0d13;
+  --panel:#0f131c;
+  --panel-2:#131826;
+  --line:rgba(130,160,200,.16);
+  --line-strong:rgba(130,160,200,.34);
+  --txt:#eaf0fa;
+  --txt-2:#9aa6ba;
+  --txt-3:#5c6678;
+  --steel:#2f7ff9;
+  --steel-bright:#5aa0ff;
+  --steel-dim:rgba(47,127,249,.14);
+  --ice:#cfe3ff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg);color:var(--txt);overflow:hidden;
+  font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    linear-gradient(rgba(130,160,200,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(130,160,200,.045) 1px, transparent 1px);
+  background-size:40px 40px;
+  -webkit-mask-image:radial-gradient(ellipse 85% 75% at 50% 38%, #000 25%, transparent 78%);
+  mask-image:radial-gradient(ellipse 85% 75% at 50% 38%, #000 25%, transparent 78%);
+}
+#map{position:fixed!important;inset:0;z-index:1}
+
+/* ---------- 顶栏 ---------- */
+.topbar{
+  position:fixed;top:0;left:0;right:0;height:64px;z-index:40;
+  display:flex;align-items:center;gap:22px;padding:0 22px;
+  background:linear-gradient(180deg,rgba(10,13,19,.97) 0%,rgba(10,13,19,.7) 70%,transparent 100%);
+  border-bottom:1px solid var(--line);
+  pointer-events:none;
+}
+.topbar>*{pointer-events:auto}
+.brand{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.brand-mark{
+  width:34px;height:34px;border-radius:4px;display:grid;place-items:center;
+  font-family:"Segoe UI",sans-serif;font-size:17px;font-weight:800;color:#06101f;
+  background:linear-gradient(135deg,#5aa0ff,#2f7ff9);
+  box-shadow:0 0 0 1px rgba(90,160,255,.45),0 6px 18px rgba(47,127,249,.4);
+}
+.brand-text h1{font-size:17px;letter-spacing:.32em;font-weight:700}
+.brand-text span{font-size:11px;color:var(--txt-2);letter-spacing:.18em}
+
+.search-wrap{position:relative;flex:0 1 460px;margin-left:6px}
+.search{
+  height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;
+  border-radius:6px;background:rgba(19,24,38,.85);
+  border:1px solid var(--line);transition:.18s;
+}
+.search:focus-within{border-color:rgba(47,127,249,.6);box-shadow:0 0 0 3px rgba(47,127,249,.12)}
+.search svg{flex-shrink:0;opacity:.55}
+.search input{flex:1;background:none;border:none;outline:none;color:var(--txt);font-size:13.5px}
+.search input::placeholder{color:var(--txt-3)}
+.suggest{
+  position:absolute;top:46px;left:0;right:0;display:none;max-height:380px;overflow-y:auto;
+  background:rgba(15,19,28,.98);border:1px solid var(--line);border-radius:8px;
+  box-shadow:0 20px 44px rgba(0,0,0,.6);
+}
+.suggest.show{display:block}
+.sug-group{font-size:11px;color:var(--txt-3);padding:10px 14px 5px;letter-spacing:.14em}
+.sug-item{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:9px 14px;font-size:13px;cursor:pointer;transition:.15s;
+}
+.sug-item:hover{background:var(--steel-dim);color:var(--steel-bright)}
+.sug-count{font-size:11px;color:var(--txt-3);flex-shrink:0}
+.sug-empty{padding:16px;text-align:center;font-size:12.5px;color:var(--txt-3)}
+
+.btn-primary{
+  height:38px;padding:0 18px;border:1px solid rgba(90,160,255,.5);border-radius:6px;cursor:pointer;
+  display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;color:#eaf2ff;letter-spacing:.06em;
+  background:linear-gradient(135deg,#3b86f6,#2261d6);
+  box-shadow:0 4px 14px rgba(35,98,214,.35);transition:.18s;
+}
+.btn-primary:hover{box-shadow:0 6px 20px rgba(47,127,249,.55);border-color:rgba(120,180,255,.8)}
+.btn-primary span{font-size:16px;line-height:1;margin-top:-2px}
+
+/* ---------- 左侧故事面板 ---------- */
+.panel{
+  position:fixed;left:20px;top:80px;bottom:20px;width:354px;z-index:30;
+  display:flex;flex-direction:column;overflow:hidden;
+  background:rgba(15,19,28,.92);border:1px solid var(--line);border-radius:10px;
+  box-shadow:0 20px 50px rgba(0,0,0,.6);
+}
+.panel-head{padding:13px 14px 10px;border-bottom:1px solid var(--line)}
+.tabs{display:flex;gap:3px;background:rgba(255,255,255,.03);padding:3px;border-radius:6px}
+.tab{
+  flex:1;height:30px;border:none;border-radius:4px;background:none;
+  color:var(--txt-2);font-size:12.5px;cursor:pointer;transition:.18s;letter-spacing:.08em;
+}
+.tab:hover{color:var(--txt)}
+.tab.active{background:var(--steel-dim);color:var(--steel-bright);font-weight:700}
+.filter-chip{
+  display:flex;align-items:center;gap:8px;margin-top:10px;
+  padding:6px 10px;border-radius:5px;font-size:12px;color:var(--steel-bright);
+  background:var(--steel-dim);border:1px solid rgba(47,127,249,.3);
+}
+.filter-chip[hidden]{display:none}
+.filter-chip button{
+  margin-left:auto;background:none;border:none;color:var(--steel-bright);
+  font-size:16px;line-height:1;cursor:pointer;opacity:.7;
+}
+.filter-chip button:hover{opacity:1}
+
+.panel-body{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:2px}
+.panel-body::-webkit-scrollbar{width:5px}
+.panel-body::-webkit-scrollbar-thumb{background:rgba(120,160,200,.22);border-radius:3px}
+.story{
+  position:relative;padding:13px 12px;border-radius:6px;cursor:pointer;
+  border:1px solid transparent;transition:.18s;
+}
+.story:hover{background:var(--steel-dim);border-color:rgba(47,127,249,.28)}
+/* 删除按钮：默认透明 hover 显现，硬朗边框小方形 */
+.story-del{
+  position:absolute;top:6px;right:6px;width:18px;height:18px;line-height:16px;
+  border:1px solid transparent;background:transparent;color:transparent;
+  font-size:14px;font-weight:700;font-family:monospace;
+  text-align:center;padding:0;cursor:pointer;border-radius:2px;
+  transition:.15s;
+}
+.story:hover .story-del{color:rgba(255,255,255,.32);border-color:rgba(255,255,255,.12)}
+.story-del:hover{color:#fff!important;background:#b43f4c;border-color:#b43f4c!important}
+.story-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px}
+.story .loc{font-size:11px;color:var(--steel-bright);letter-spacing:.05em}
+.story .time{font-size:11px;color:var(--txt-3)}
+.story h3{font-size:14px;font-weight:600;margin-bottom:6px;letter-spacing:.02em}
+.story p{
+  font-size:12px;line-height:1.72;color:var(--txt-2);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.story .meta{display:flex;gap:12px;margin-top:9px;font-size:11px;color:var(--txt-3)}
+.story .nick{margin-left:auto;color:var(--txt-3)}
+.empty{padding:48px 20px;text-align:center;font-size:12.5px;color:var(--txt-3);line-height:1.9}
+.panel-foot{
+  padding:9px 16px;border-top:1px solid var(--line);
+  font-size:11px;color:var(--txt-3);letter-spacing:.1em;
+}
+
+/* ---------- 地图控件 ---------- */
+.map-ctrl{
+  position:fixed;right:22px;bottom:26px;z-index:30;
+  display:flex;flex-direction:column;gap:8px;
+}
+.map-ctrl button{
+  width:38px;height:38px;border-radius:6px;cursor:pointer;
+  background:rgba(15,19,28,.9);border:1px solid var(--line);
+  color:var(--txt-2);font-size:17px;line-height:1;transition:.18s;
+}
+.map-ctrl button:hover{color:var(--steel-bright);border-color:rgba(47,127,249,.5)}
+
+.legend{
+  position:fixed;right:22px;bottom:158px;z-index:30;
+  padding:11px 14px;border-radius:8px;
+  background:rgba(15,19,28,.9);border:1px solid var(--line);
+  font-size:11.5px;color:var(--txt-2);
+}
+.legend-title{font-size:10.5px;color:var(--txt-3);letter-spacing:.18em;margin-bottom:8px}
+.legend-row{display:flex;align-items:center;gap:8px;margin-top:6px}
+.dot{border-radius:50%;background:var(--steel-bright);box-shadow:0 0 10px rgba(47,127,249,.9);flex-shrink:0}
+.dot.s1{width:8px;height:8px}
+.dot.s3{width:12px;height:12px}
+.dot.s5{width:16px;height:16px}
+
+/* ---------- 阅读抽屉 ---------- */
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;width:min(560px,94vw);z-index:60;
+  background:rgba(10,13,19,.98);border-left:1px solid var(--line);
+  transform:translateX(100%);transition:transform .4s cubic-bezier(.4,0,.2,1);
+  overflow-y:auto;box-shadow:-30px 0 80px rgba(0,0,0,.7);
+}
+.drawer.open{transform:translateX(0)}
+.drawer-inner{padding:34px 32px 60px;position:relative}
+.drawer-close{
+  position:absolute;top:20px;right:22px;width:32px;height:32px;border-radius:5px;
+  background:rgba(255,255,255,.04);border:1px solid var(--line);
+  color:var(--txt-2);font-size:19px;line-height:1;cursor:pointer;transition:.18s;
+}
+.drawer-close:hover{color:var(--txt);background:rgba(255,255,255,.1)}
+.rd-loc{font-size:12px;color:var(--steel-bright);letter-spacing:.14em;margin-bottom:12px}
+.rd-title{
+  font-size:24px;line-height:1.45;font-weight:700;letter-spacing:.03em;margin-bottom:14px;
+}
+.rd-meta{font-size:12px;color:var(--txt-3);padding-bottom:18px;border-bottom:1px solid var(--line);margin-bottom:22px;letter-spacing:.06em}
+.rd-content p{font-size:14.5px;line-height:2.1;color:#c9d5e5;margin-bottom:16px;text-align:justify}
+.rd-actions{margin-top:28px}
+
+.btn-ghost{
+  height:38px;padding:0 16px;border-radius:6px;cursor:pointer;
+  background:var(--steel-dim);border:1px solid rgba(47,127,249,.35);
+  color:var(--steel-bright);font-size:13px;transition:.18s;letter-spacing:.06em;
+}
+.btn-ghost:hover{background:rgba(47,127,249,.22)}
+
+/* ---------- 上传弹窗 ---------- */
+.mask{
+  position:fixed;inset:0;z-index:80;display:none;place-items:center;
+  background:rgba(4,6,10,.8);padding:20px;
+}
+.mask.open{display:grid}
+.modal{
+  width:min(560px,100%);max-height:88vh;overflow-y:auto;
+  background:rgba(15,19,28,.99);border:1px solid var(--line-strong);border-radius:10px;
+  padding:26px 26px 22px;box-shadow:0 40px 100px rgba(0,0,0,.75);
+}
+.modal::-webkit-scrollbar{width:5px}
+.modal::-webkit-scrollbar-thumb{background:rgba(120,160,200,.22);border-radius:3px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.modal-head h2{font-size:18px;font-weight:700;letter-spacing:.18em}
+.modal-close{
+  width:30px;height:30px;border-radius:5px;background:rgba(255,255,255,.04);
+  border:1px solid var(--line);color:var(--txt-2);font-size:18px;line-height:1;cursor:pointer;
+}
+.modal-close:hover{color:var(--txt)}
+.modal-sub{font-size:12px;color:var(--txt-3);line-height:1.7;margin-bottom:20px}
+.field{margin-bottom:15px;flex:1}
+.field label{display:block;font-size:12px;color:var(--txt-2);margin-bottom:7px;letter-spacing:.08em}
+.field input,.field select,.field textarea{
+  width:100%;padding:10px 12px;border-radius:6px;
+  background:rgba(255,255,255,.03);border:1px solid var(--line);
+  color:var(--txt);font-size:13px;font-family:inherit;outline:none;transition:.18s;
+}
+.field textarea{resize:vertical;line-height:1.8}
+.field input:focus,.field select:focus,.field textarea:focus{
+  border-color:rgba(47,127,249,.6);background:rgba(47,127,249,.06);
+}
+.field select option{background:#0f131c}
+.field-row{display:flex;gap:13px}
+.btn-block{width:100%;justify-content:center;height:44px;margin-top:8px;font-size:14px}
+
+.map-error{
+  position:fixed;inset:0;display:grid;place-items:center;
+  color:var(--txt-3);font-size:13px;
+}
+
+@media(max-width:900px){
+  .brand-text{display:none}
+  .search-wrap{flex:1}
+  .panel{
+    left:10px;right:10px;width:auto;top:auto;height:44vh;bottom:10px;border-radius:16px 16px 0 0;
+  }
+  .legend{display:none}
+  .map-ctrl{bottom:calc(44vh + 22px);right:14px}
+}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<!-- 顶栏 -->
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">异</div>
+    <div class="brand-text">
+      <h1>异闻录</h1>
+      <span>记录 · 不该存在的事</span>
+    </div>
+  </div>
+
+  <div class="search-wrap">
+    <div class="search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9aa6ba" stroke-width="2">
+        <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+      </svg>
+      <input id="searchInput" placeholder="搜索地点或关键词">
+    </div>
+    <div class="suggest" id="suggest"></div>
+  </div>
+
+  <button class="btn-primary" id="uploadBtn"><span>+</span>录入异闻</button>
+</header>
+
+<!-- 左侧故事流 -->
+<aside class="panel">
+  <div class="panel-head">
+    <div class="tabs">
+      <button class="tab active" data-sort="new">最新</button>
+      <button class="tab" data-sort="hot">最热</button>
+      <button class="tab" data-sort="random">随机</button>
+    </div>
+    <div class="filter-chip" id="filterChip" hidden>
+      <span id="filterName"></span>
+      <button id="clearFilter">×</button>
+    </div>
+  </div>
+  <div class="panel-body" id="storyList"></div>
+  <div class="panel-foot" id="panelFoot"></div>
+</aside>
+
+<!-- 地图控件 -->
+<div class="map-ctrl">
+  <button id="zoomIn">+</button>
+  <button id="zoomOut">−</button>
+  <button id="resetView" title="回到全国">◎</button>
+</div>
+
+<!-- 图例 -->
+<div class="legend">
+  <div class="legend-title">图例</div>
+  <div class="legend-row"><i class="dot s1"></i>1 则记录</div>
+  <div class="legend-row"><i class="dot s3"></i>3 则左右</div>
+  <div class="legend-row"><i class="dot s5"></i>5 则以上</div>
+</div>
+
+<!-- 阅读抽屉 -->
+<div class="drawer" id="drawer">
+  <div class="drawer-inner">
+    <button class="drawer-close" id="drawerClose">×</button>
+    <div id="drawerBody"></div>
+  </div>
+</div>
+
+<!-- 上传弹窗 -->
+<div class="mask" id="uploadMask">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>录入异闻</h2>
+      <button class="modal-close" id="modalClose">×</button>
+    </div>
+    <p class="modal-sub">匿名提交，无需注册。请尽量写明大致地点，便于在地图上定位归档。</p>
+
+    <div class="field">
+      <label>标题</label>
+      <input id="fTitle" maxlength="40" placeholder="给这个故事起个名字">
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label>省份</label>
+        <select id="fProvince"></select>
+      </div>
+      <div class="field">
+        <label>城市 / 区县</label>
+        <input id="fCity" placeholder="如：湘西 吉首">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>故事正文</label>
+      <textarea id="fContent" rows="7" placeholder="那天夜里，我……"></textarea>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label>署名（选填）</label>
+        <input id="fNick" placeholder="佚名">
+      </div>
+      <div class="field">
+        <label>故事类型</label>
+        <select id="fType">
+          <option>亲身经历</option>
+          <option>道听途说</option>
+          <option>地方传说</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="btn-primary btn-block" id="fSubmit">发布故事</button>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   1. 数据层
+   ========================================================= */
+const STORIES = []; // 内存缓存，启动时由 dataStore 填充
+
+/* =========================================================
+   1.1 持久化层（localStorage 顶上，预留 Supabase 云端共享）
+   - 当前模式：localStorage（单设备，刷新不丢）
+   - 切换云端共享：填入下方 SUPABASE_CONFIG 的 url 和 anonKey，
+     无需改动其他代码，dataStore 会自动走 Supabase
+   ========================================================= */
+const STORAGE_KEY = 'yiwenlu_stories_v1';
+const SUPABASE_CONFIG = {
+  url: '',      // 例：https://xxxxxxxx.supabase.co
+  anonKey: ''   // Project Settings → API → anon public key
+};
+
+const dataStore = {
+  _client: null,
+  _loading: null,
+
+  /* 按需加载 Supabase 客户端（仅在配置了 url/key 时才加载 SDK） */
+  async _getClient() {
+    if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.anonKey) return null;
+    if (this._client) return this._client;
+    if (this._loading) return this._loading;
+    this._loading = new Promise(resolve => {
+      if (window.supabase) {
+        this._client = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+        return resolve(this._client);
+      }
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+      s.onload = () => {
+        this._client = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+        resolve(this._client);
+      };
+      s.onerror = () => { console.error('Supabase SDK 加载失败'); resolve(null); };
+      document.head.appendChild(s);
+    });
+    return this._loading;
+  },
+
+  /* 读取全部故事（按时间倒序），返回 Promise<Array> */
+  async getAll() {
+    const sb = await this._getClient();
+    if (sb) {
+      const { data, error } = await sb.from('stories')
+        .select('*').order('created_at', { ascending: false });
+      if (error) { console.error('读取故事失败', error); return []; }
+      // 数据库 snake_case → 前端 camelCase
+      return (data || []).map(row => ({
+        id: row.id, title: row.title, province: row.province, city: row.city,
+        district: row.district, lng: row.lng, lat: row.lat, nick: row.nick,
+        views: row.views || 0, likes: row.likes || 0, time: row.time,
+        ts: row.created_at ? new Date(row.created_at).getTime() : 0,
+        excerpt: row.excerpt, content: row.content
+      }));
+    }
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+    catch (e) { console.error('读取本地故事失败', e); return []; }
+  },
+
+  /* 新增一条故事，返回保存后的对象（含服务端 id）；失败返回 null */
+  async add(story) {
+    const sb = await this._getClient();
+    if (sb) {
+      const { data, error } = await sb.from('stories').insert({
+        title: story.title, province: story.province, city: story.city,
+        district: story.district, lng: story.lng, lat: story.lat, nick: story.nick,
+        views: 0, likes: 0, time: story.time, excerpt: story.excerpt, content: story.content
+      }).select();
+      if (error) { console.error('保存故事失败', error); alert('保存失败，请稍后重试'); return null; }
+      const row = data[0];
+      return { ...story, id: row.id, ts: new Date(row.created_at).getTime() };
+    }
+    const all = await this.getAll();
+    all.unshift(story);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(all)); }
+    catch (e) { console.error('保存本地故事失败', e); alert('保存失败'); return null; }
+    return story;
+  },
+
+  /* 删除指定 id 的故事，返回是否成功 */
+  async remove(id) {
+    const sb = await this._getClient();
+    if (sb) {
+      const { error } = await sb.from('stories').delete().eq('id', id);
+      if (error) { console.error('删除故事失败', error); alert('删除失败，请稍后重试'); return false; }
+      return true;
+    }
+    const all = await this.getAll();
+    const filtered = all.filter(s => String(s.id) !== String(id));
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered)); }
+    catch (e) { console.error('删除本地故事失败', e); alert('删除失败'); return false; }
+    return filtered.length !== all.length;
+  }
+};
+
+/* 城市坐标表（用于新增故事时定位） */
+const CITY_COORD = {
+  '北京':[116.40,39.90],'上海':[121.47,31.23],'天津':[117.20,39.13],'重庆':[106.55,29.56],
+  '哈尔滨':[126.53,45.80],'长春':[125.32,43.90],'沈阳':[123.43,41.80],'石家庄':[114.51,38.04],
+  '太原':[112.55,37.87],'呼和浩特':[111.75,40.84],'济南':[117.00,36.65],'青岛':[120.38,36.07],
+  '郑州':[113.63,34.75],'洛阳':[112.45,34.62],'开封':[114.31,34.80],'西安':[108.94,34.34],
+  '兰州':[103.83,36.06],'西宁':[101.78,36.62],'银川':[106.23,38.49],'乌鲁木齐':[87.62,43.79],
+  '喀什':[75.99,39.47],'拉萨':[91.14,29.65],'成都':[104.07,30.57],'都江堰':[103.62,30.99],
+  '昆明':[102.83,24.88],'丽江':[100.23,26.87],'贵阳':[106.63,26.65],'南宁':[108.37,22.82],
+  '桂林':[110.29,25.27],'海口':[110.35,20.03],'三亚':[109.51,18.25],'广州':[113.26,23.13],
+  '深圳':[114.06,22.55],'长沙':[112.94,28.23],'吉首':[109.73,28.31],'湘西':[109.73,28.31],
+  '凤凰':[109.60,27.95],'武汉':[114.30,30.59],'南昌':[115.89,28.68],'合肥':[117.28,31.86],
+  '南京':[118.80,32.06],'苏州':[120.62,31.32],'杭州':[120.15,30.27],'宁波':[121.55,29.87],
+  '福州':[119.30,26.08],'泉州':[118.58,24.90],'厦门':[118.09,24.48],'香港':[114.17,22.32],
+  '澳门':[113.55,22.20],'台北':[121.56,25.03]
+};
+const PROV_CENTER = {
+  '北京':[116.4,39.9],'上海':[121.47,31.23],'天津':[117.2,39.13],'重庆':[106.55,29.56],
+  '河北':[114.51,38.04],'山西':[112.55,37.87],'辽宁':[123.43,41.8],'吉林':[125.32,43.9],
+  '黑龙江':[126.53,45.8],'江苏':[118.8,32.06],'浙江':[120.15,30.27],'安徽':[117.28,31.86],
+  '福建':[119.3,26.08],'江西':[115.89,28.68],'山东':[117.0,36.65],'河南':[113.63,34.75],
+  '湖北':[114.3,30.59],'湖南':[112.94,28.23],'广东':[113.26,23.13],'海南':[110.35,20.03],
+  '四川':[104.07,30.57],'贵州':[106.63,26.65],'云南':[102.83,24.88],'陕西':[108.94,34.34],
+  '甘肃':[103.83,36.06],'青海':[101.78,36.62],'台湾':[121.56,25.03],'内蒙古':[111.75,40.84],
+  '广西':[108.37,22.82],'西藏':[91.14,29.65],'宁夏':[106.23,38.49],'新疆':[87.62,43.79],
+  '香港':[114.17,22.32],'澳门':[113.55,22.2]
+};
+
+/* =========================================================
+   2. 工具
+   ========================================================= */
+const $ = sel => document.querySelector(sel);
+const fmt = n => n >= 10000 ? (n / 10000).toFixed(1) + '万' : String(n);
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const DEFAULT_VIEW = { center: [104, 37], zoom: 1.05 };
+
+/* =========================================================
+   3. 状态
+   ========================================================= */
+let chart = null;
+let GROUP_LIST = [];
+let GROUP_MAP = new Map();
+let currentSort = 'new';
+let currentFilter = null;
+
+/* =========================================================
+   4. 按地点聚合
+   ========================================================= */
+function buildGroups() {
+  const map = new Map();
+  STORIES.forEach(s => {
+    const key = `${s.city}|${s.district}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        name: `${s.city} · ${s.district}`,
+        province: s.province, city: s.city, district: s.district,
+        value: [s.lng, s.lat, 0],
+        stories: []
+      });
+    }
+    const g = map.get(key);
+    g.stories.push(s);
+    g.value[2] = g.stories.length;
+  });
+  GROUP_LIST = [...map.values()];
+  GROUP_MAP = map;
+}
+
+/* =========================================================
+   5. 地图
+   ========================================================= */
+// 加载顺序：本地文件（同域，无跨域）→ 阿里 CDN full → 阿里 CDN 简版
+const GEO_URLS = [
+  'china.json',
+  'https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json',
+  'https://geo.datav.aliyun.com/areas_v3/bound/100000.json'
+];
+
+function loadGeo(urls, idx) {
+  if (idx >= urls.length) {
+    chart.hideLoading();
+    document.getElementById('map').innerHTML =
+      '<div class="map-error">地图数据加载失败，请检查网络后刷新</div>';
+    return;
+  }
+  fetch(urls[idx])
+    .then(r => { if (!r.ok) throw new Error('bad status'); return r.json(); })
+    .then(json => {
+      echarts.registerMap('china', json);
+      chart.hideLoading();
+      drawMap();
+    })
+    .catch(() => loadGeo(urls, idx + 1));
+}
+
+function initMap() {
+  chart = echarts.init(document.getElementById('map'), null, { renderer: 'canvas' });
+  chart.showLoading({
+    text: '正在载入地图数据…', color: '#5aa0ff',
+    textColor: '#9aa6ba', maskColor: 'rgba(10,13,19,.94)', fontSize: 13
+  });
+
+  loadGeo(GEO_URLS, 0);
+
+  window.addEventListener('resize', () => chart && chart.resize());
+}
+
+function drawMap() {
+  chart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'item',
+      backgroundColor: 'rgba(15,19,28,.97)',
+      borderColor: 'rgba(47,127,249,.45)',
+      borderWidth: 1,
+      padding: [9, 13],
+      textStyle: { color: '#eaf0fa', fontSize: 12 },
+      formatter: p => {
+        if (!p.data || !p.data.key) return '';
+        const g = GROUP_MAP.get(p.data.key);
+        if (!g) return '';
+        return `<b style="color:#5aa0ff">${g.name}</b><br/>${g.stories.length} 则记录 · 点击查看`;
+      }
+    },
+    geo: {
+      map: 'china',
+      roam: true,
+      zoom: DEFAULT_VIEW.zoom,
+      center: DEFAULT_VIEW.center,
+      scaleLimit: { min: 0.8, max: 14 },
+      itemStyle: {
+        areaColor: '#0f1623',
+        borderColor: 'rgba(90,150,210,.32)',
+        borderWidth: 1,
+        shadowColor: 'rgba(47,127,249,.22)',
+        shadowBlur: 30,
+        shadowOffsetY: 8
+      },
+      emphasis: {
+        label: { show: true, color: '#cfe3ff', fontSize: 12 },
+        itemStyle: { areaColor: '#1b2942', borderColor: 'rgba(90,160,255,.85)' }
+      },
+      select: { disabled: true },
+      label: { show: false }
+    },
+    series: [
+      {
+        id: 'points',
+        type: 'effectScatter',
+        coordinateSystem: 'geo',
+        zlevel: 2,
+        rippleEffect: { brushType: 'stroke', scale: 3.0, period: 3.8, number: 3 },
+        symbolSize: v => 7 + Math.min(v[2] || 1, 6) * 2.6,
+        itemStyle: {
+          color: '#5aa0ff',
+          shadowBlur: 16,
+          shadowColor: 'rgba(47,127,249,.9)'
+        },
+        emphasis: { scale: 1.35 },
+        data: GROUP_LIST.map(g => ({ key: g.key, name: g.name, value: g.value }))
+      },
+      {
+        id: 'focus',
+        type: 'scatter',
+        coordinateSystem: 'geo',
+        zlevel: 3,
+        symbolSize: 36,
+        silent: true,
+        itemStyle: {
+          color: 'transparent',
+          borderColor: '#7fbfff',
+          borderWidth: 2,
+          shadowBlur: 20,
+          shadowColor: 'rgba(127,191,255,.85)'
+        },
+        data: []
+      }
+    ]
+  });
+
+  chart.on('click', p => {
+    if (p.data && p.data.key) selectLocation(p.data.key);
+  });
+}
+
+function refreshPoints() {
+  if (!chart) return;
+  chart.setOption({
+    series: [{
+      id: 'points',
+      data: GROUP_LIST.map(g => ({ key: g.key, name: g.name, value: g.value }))
+    }]
+  });
+}
+
+/* =========================================================
+   6. 选中地点 / 复位
+   ========================================================= */
+function selectLocation(key) {
+  const g = GROUP_MAP.get(key);
+  if (!g) return;
+  currentFilter = g;
+  const chip = $('#filterChip');
+  chip.hidden = false;
+  $('#filterName').textContent = `${g.name} · ${g.stories.length} 则`;
+  renderList();
+
+  chart.setOption({
+    geo: { center: [g.value[0], g.value[1]], zoom: 5 },
+    series: [{ id: 'focus', data: [[g.value[0], g.value[1]]] }]
+  });
+}
+
+function resetView() {
+  currentFilter = null;
+  $('#filterChip').hidden = true;
+  renderList();
+  chart.setOption({
+    geo: { center: DEFAULT_VIEW.center, zoom: DEFAULT_VIEW.zoom },
+    series: [{ id: 'focus', data: [] }]
+  });
+}
+
+/* =========================================================
+   7. 左侧故事流
+   ========================================================= */
+function renderList() {
+  let list = currentFilter ? currentFilter.stories.slice() : STORIES.slice();
+
+  if (currentSort === 'new') list.sort((a, b) => b.ts - a.ts);
+  else if (currentSort === 'hot') list.sort((a, b) => b.views - a.views);
+  else list.sort(() => Math.random() - 0.5);
+
+  const el = $('#storyList');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty">暂无异闻记录<br>点击右上角「录入异闻」开始归档</div>';
+    $('#panelFoot').textContent = '共 0 则记录 · 0 个地点';
+    return;
+  }
+
+  el.innerHTML = list.map(s => `
+    <article class="story" data-id="${s.id}">
+      <button class="story-del" title="删除此条记录">×</button>
+      <div class="story-head">
+        <span class="loc">◈ ${s.city} · ${s.district}</span>
+        <span class="time">${s.time.slice(5)}</span>
+      </div>
+      <h3>${s.title}</h3>
+      <p>${s.excerpt}</p>
+      <div class="meta">
+        <span>${fmt(s.views)} 阅读</span>
+        <span>♡ ${fmt(s.likes)}</span>
+        <span class="nick">@${s.nick}</span>
+      </div>
+    </article>
+  `).join('');
+
+  $('#panelFoot').textContent = `共 ${list.length} 则记录 · ${GROUP_LIST.length} 个地点`;
+}
+
+/* 删除单条故事 */
+async function deleteStory(id) {
+  const s = STORIES.find(x => String(x.id) === String(id));
+  if (!s) return;
+  if (!confirm(`确定删除「${s.title}」？此操作无法撤销。`)) return;
+
+  const ok = await dataStore.remove(id);
+  if (!ok) return;
+  // 同步更新内存
+  const idx = STORIES.findIndex(x => String(x.id) === String(id));
+  if (idx >= 0) STORIES.splice(idx, 1);
+
+  buildGroups();
+  refreshPoints();
+  // 如果当前选中的就是这条，清除筛选
+  if (currentFilter && currentFilter.stories.find(x => String(x.id) === String(id))) {
+    resetView();
+  } else {
+    renderList();
+  }
+}
+
+/* =========================================================
+   8. 阅读抽屉
+   ========================================================= */
+function openStory(id) {
+  const s = STORIES.find(x => x.id === id);
+  if (!s) return;
+
+  $('#drawerBody').innerHTML = `
+    <div class="rd-loc">${s.province} · ${s.city} · ${s.district}</div>
+    <h2 class="rd-title">${s.title}</h2>
+    <div class="rd-meta">@${s.nick} · ${s.time} · ${fmt(s.views)} 次阅读</div>
+    <div class="rd-content">${s.content.split('\n').map(p => `<p>${p}</p>`).join('')}</div>
+    <div class="rd-actions">
+      <button class="btn-ghost" id="rdLocBtn">在地图上查看这个地点</button>
+    </div>
+  `;
+  $('#drawer').classList.add('open');
+  $('#rdLocBtn').onclick = () => {
+    $('#drawer').classList.remove('open');
+    selectLocation(`${s.city}|${s.district}`);
+  };
+}
+
+/* =========================================================
+   9. 搜索
+   ========================================================= */
+const searchInput = $('#searchInput');
+const suggestEl = $('#suggest');
+
+function renderSuggest(locs, stories) {
+  if (!locs.length && !stories.length) {
+    suggestEl.innerHTML = '<div class="sug-empty">没有找到相关内容</div>';
+    suggestEl.classList.add('show');
+    return;
+  }
+  let html = '';
+  if (locs.length) {
+    html += '<div class="sug-group">地点</div>';
+    html += locs.map(g => `
+      <div class="sug-item" data-loc="${g.key}">
+        <span>${g.name}</span>
+        <span class="sug-count">${g.stories.length} 则</span>
+      </div>`).join('');
+  }
+  if (stories.length) {
+    html += '<div class="sug-group">故事</div>';
+    html += stories.map(s => `
+      <div class="sug-item" data-story="${s.id}">
+        <span>${s.title}</span>
+        <span class="sug-count">${s.city}</span>
+      </div>`).join('');
+  }
+  suggestEl.innerHTML = html;
+  suggestEl.classList.add('show');
+}
+
+searchInput.addEventListener('input', debounce(() => {
+  const q = searchInput.value.trim();
+  if (!q) { suggestEl.classList.remove('show'); return; }
+  const locs = GROUP_LIST
+    .filter(g => (g.province + g.city + g.district).includes(q))
+    .slice(0, 5);
+  const stories = STORIES
+    .filter(s => s.title.includes(q) || s.content.includes(q))
+    .slice(0, 6);
+  renderSuggest(locs, stories);
+}, 180));
+
+suggestEl.addEventListener('click', e => {
+  const locEl = e.target.closest('[data-loc]');
+  const storyEl = e.target.closest('[data-story]');
+  if (locEl) {
+    selectLocation(locEl.dataset.loc);
+    suggestEl.classList.remove('show');
+    searchInput.value = '';
+  } else if (storyEl) {
+    openStory(+storyEl.dataset.story);
+    suggestEl.classList.remove('show');
+  }
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrap')) suggestEl.classList.remove('show');
+});
+
+/* =========================================================
+   10. 上传
+   ========================================================= */
+const PROVINCES = Object.keys(PROV_CENTER);
+
+function initUploadForm() {
+  const sel = $('#fProvince');
+  sel.innerHTML = PROVINCES.map(p => `<option>${p}</option>`).join('');
+}
+
+function lookupCoord(province, cityText) {
+  const parts = cityText.split(/[\s,，、/]+/).filter(Boolean);
+  for (const p of parts) if (CITY_COORD[p]) return CITY_COORD[p];
+  return PROV_CENTER[province] || [104, 37];
+}
+
+async function submitStory() {
+  const title = $('#fTitle').value.trim();
+  const province = $('#fProvince').value;
+  const cityRaw = $('#fCity').value.trim();
+  const content = $('#fContent').value.trim();
+  const nick = $('#fNick').value.trim() || '佚名';
+
+  if (!title) { alert('请填写标题'); return; }
+  if (!cityRaw) { alert('请填写大致地点，例如「湘西 吉首」'); return; }
+  if (content.length < 20) { alert('故事太短啦，至少写 20 个字吧'); return; }
+
+  const parts = cityRaw.split(/[\s,，]+/).filter(Boolean);
+  const city = parts[0];
+  const district = parts[1] || '城区';
+  const [lng, lat] = lookupCoord(province, cityRaw);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const newStory = {
+    id: Date.now(),
+    title, province, city, district, lng, lat, nick,
+    views: 0, likes: 0, time: today, ts: Date.now(),
+    excerpt: content.slice(0, 80),
+    content
+  };
+
+  // 写入持久层（localStorage 或 Supabase），成功后更新内存与界面
+  const saved = await dataStore.add(newStory);
+  if (!saved) return;
+  STORIES.unshift(saved);
+
+  buildGroups();
+  refreshPoints();
+  renderList();
+
+  $('#uploadMask').classList.remove('open');
+  ['#fTitle', '#fCity', '#fContent', '#fNick'].forEach(s => $(s).value = '');
+
+  // 定位到新故事所在城市
+  selectLocation(`${city}|${district}`);
+}
+
+/* =========================================================
+   11. 事件绑定 & 启动
+   ========================================================= */
+function bindEvents() {
+  // 标签页
+  document.querySelectorAll('.tab').forEach(t => {
+    t.onclick = () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      currentSort = t.dataset.sort;
+      renderList();
+    };
+  });
+
+  // 清除地点筛选
+  $('#clearFilter').onclick = resetView;
+
+  // 列表点击：先拦截删除按钮
+  $('#storyList').addEventListener('click', e => {
+    const card = e.target.closest('.story');
+    if (!card) return;
+    if (e.target.closest('.story-del')) {
+      deleteStory(+card.dataset.id);
+      return;
+    }
+    openStory(+card.dataset.id);
+  });
+
+  // 地图控件
+  $('#zoomIn').onclick = () => {
+    const g = chart.getOption().geo[0];
+    chart.setOption({ geo: { zoom: Math.min((g.zoom || 1) * 1.4, 14) } });
+  };
+  $('#zoomOut').onclick = () => {
+    const g = chart.getOption().geo[0];
+    chart.setOption({ geo: { zoom: Math.max((g.zoom || 1) / 1.4, 0.8) } });
+  };
+  $('#resetView').onclick = resetView;
+
+  // 阅读抽屉
+  $('#drawerClose').onclick = () => $('#drawer').classList.remove('open');
+
+  // 上传弹窗
+  $('#uploadBtn').onclick = () => $('#uploadMask').classList.add('open');
+  $('#modalClose').onclick = () => $('#uploadMask').classList.remove('open');
+  $('#uploadMask').addEventListener('click', e => {
+    if (e.target.id === 'uploadMask') e.currentTarget.classList.remove('open');
+  });
+  $('#fSubmit').onclick = submitStory;
+
+  // ESC
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      $('#drawer').classList.remove('open');
+      $('#uploadMask').classList.remove('open');
+      suggestEl.classList.remove('show');
+    }
+  });
+}
+
+/* 启动：先从持久层加载数据到内存，再渲染界面与地图 */
+(async function init() {
+  const list = await dataStore.getAll();
+  STORIES.push(...list);
+  buildGroups();
+  renderList();
+  initUploadForm();
+  bindEvents();
+  initMap();
+})();
+</script>
+</body>
+</html>
